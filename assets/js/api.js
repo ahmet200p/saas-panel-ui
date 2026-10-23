@@ -5,7 +5,7 @@
  * ============================================================================
  * 
  * Özellikler:
- * 1. Canlı Backend Desteği: Express API (http://localhost:5000) açık olduğunda
+ * 1. Canlı Backend Desteği: Express API (https://saas-g-ncel-10-10-2026simdi-main.onrender.com) açık olduğunda
  *    tüm istekleri doğrudan PostgreSQL veritabanına iletir.
  * 2. Akıllı Çevrimdışı / Bağımsız (Standalone / file://) Modu:
  *    Sunucu henüz başlatılmamışsa veya dosya doğrudan tarayıcıda (file://) açılmışsa
@@ -17,7 +17,7 @@
   'use strict';
 
   // Sunucu Adresi Yapılandırması (Headless Mimari prompt.md gereği doğrudan absolute URL):
-  const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'http://localhost:5000/api';
+  const API_BASE = (typeof window !== 'undefined' && window.API_BASE) ? window.API_BASE : 'https://saas-g-ncel-10-10-2026simdi-main.onrender.com/api';
   const isDirectExpress = false;
 
   // ----------------------------------------------------------------------------
@@ -1405,7 +1405,7 @@
       let brandFilter = '';
       let searchFilter = '';
       try {
-        const parsedUrl = new URL(endpoint, 'http://localhost');
+        const parsedUrl = new URL(endpoint, 'https://saas-g-ncel-10-10-2026simdi-main.onrender.com');
         brandFilter = (parsedUrl.searchParams.get('brand') || '').trim().toLowerCase();
         searchFilter = (parsedUrl.searchParams.get('search') || '').trim().toLowerCase();
       } catch (e) {}
@@ -1665,7 +1665,7 @@
       if (!url.startsWith('/api')) {
         url = `${API_BASE}${url.startsWith('/') ? url : '/' + url}`;
       } else if (!isDirectExpress) {
-        url = `http://localhost:5000${url}`;
+        url = `https://saas-g-ncel-10-10-2026simdi-main.onrender.com${url}`;
       }
     }
 
@@ -1709,7 +1709,7 @@
       body = JSON.stringify(body);
     }
 
-    // 3. Canlı Sunucuya Bağlantı Denemesi (Yerel localhost Express API'sine doğrudan bağlan)
+    // 3. Canlı Sunucuya Bağlantı Denemesi (Render Express API'sine doğrudan bağlan)
     try {
       const controller = new AbortController();
       const timeoutMs = (options.body instanceof FormData) ? 60000 : 15000;
