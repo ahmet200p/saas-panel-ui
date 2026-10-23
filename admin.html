@@ -14,6 +14,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
+  <!-- SweetAlert2: Güncel topluluk onay ve bildirim paketi -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="assets/js/api.js"></script>
 </head>
 
@@ -430,7 +432,7 @@
         </div>
 
         <div class="table-container" style="border: 1.5px solid #fde68a; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-          <table class="tenants-table" style="margin: 0;">
+          <table class="tenants-table" id="pending-tenants-table" style="margin: 0;">
             <thead>
               <tr style="background: #fffbeb;">
                 <th>Firma Adı</th>
@@ -450,7 +452,7 @@
 
       <!-- Kayıtlı Firmalar Tablosu -->
       <section class="table-container">
-        <table class="tenants-table">
+        <table class="tenants-table" id="tenants-main-table">
           <thead>
             <tr>
               <th>Firma Adı</th>
@@ -460,7 +462,8 @@
               <th>İşlemler</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tenants-main-tbody">
+            <!-- JS ile dinamik doldurulacak (statü fark etmeksizin tüm bayiler) -->
             <!-- Satır 1: Ahmet Oto -->
             <tr data-tenant-id="tenant-ahmet-oto">
               <td>
@@ -1217,16 +1220,53 @@
     window.loadPendingTenants = loadPendingTenants;
 
     async function approveTenant(tenantId, tenantName) {
-      if (!confirm(`"${tenantName}" bayisinin başvurusunu onaylamak ve mağaza yönetimini aktif etmek istiyor musunuz?`)) return;
+      if (!tenantId) return;
+      let confirmed = false;
+
+      if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+          title: 'Bayi Hesabını Onayla',
+          html: `<p style="font-size: 0.95rem; color: #475569; margin-bottom: 10px;"><strong>"${escapeHtml(tenantName)}"</strong> bayisinin hesabını onaylamak ve mağaza yönetimini aktif etmek istiyor musunuz?</p><div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:10px; font-size:0.835rem; color:#047857; text-align:left; display:flex; align-items:center; gap:8px;"><span>✓</span><span>Mağaza vitrini aktifleşecek, bayi ürün kataloğu yönetebilecek ve sipariş alabilecektir.</span></div>`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonColor: '#10b981',
+          cancelButtonColor: '#64748b',
+          confirmButtonText: '✓ Evet, Hesabı Onayla',
+          cancelButtonText: 'Vazgeç',
+          reverseButtons: true,
+          focusConfirm: true
+        });
+        confirmed = result.isConfirmed;
+      } else {
+        confirmed = confirm(`"${tenantName}" bayisinin başvurusunu onaylamak ve mağaza yönetimini aktif etmek istiyor musunuz?`);
+      }
+
+      if (!confirmed) return;
+
       try {
         const res = await apiFetch(`/admin/tenants/${tenantId}/approve`, { method: 'PUT' });
         if (res && res.success) {
-          showToast(res.message || 'Bayi başarıyla onaylandı.', 'success');
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'success',
+              title: 'Hesap Onaylandı!',
+              text: res.message || `"${tenantName}" bayisi başarıyla onaylandı ve mağazası aktifleştirildi.`,
+              timer: 2400,
+              showConfirmButton: false
+            });
+          } else {
+            showToast(res.message || 'Bayi başarıyla onaylandı.', 'success');
+          }
           await loadPendingTenants();
           await loadTenants();
           await loadAdminStats();
         } else {
-          showToast(res && res.message ? res.message : 'Onaylama başarısız.', 'danger');
+          const errMsg = (res && res.message) ? res.message : 'Onaylama başarısız.';
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Onay Başarısız', text: errMsg });
+          } else {
+            showToast(errMsg, 'danger');
+          }
         }
       } catch (err) {
         showToast('Hata: ' + err.message, 'danger');
@@ -1235,16 +1275,52 @@
     window.approveTenant = approveTenant;
 
     async function rejectTenant(tenantId, tenantName) {
-      if (!confirm(`"${tenantName}" bayisinin başvurusunu reddetmek istediğinize emin misiniz?`)) return;
+      if (!tenantId) return;
+      let confirmed = false;
+
+      if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+          title: 'Bayi Başvurusunu Reddet',
+          html: `<p style="font-size: 0.95rem; color: #475569; margin-bottom: 8px;"><strong>"${escapeHtml(tenantName)}"</strong> bayisinin başvurusunu reddetmek istediğinize emin misiniz?</p>`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#ef4444',
+          cancelButtonColor: '#64748b',
+          confirmButtonText: '✕ Evet, Reddet',
+          cancelButtonText: 'Vazgeç',
+          reverseButtons: true
+        });
+        confirmed = result.isConfirmed;
+      } else {
+        confirmed = confirm(`"${tenantName}" bayisinin başvurusunu reddetmek istediğinize emin misiniz?`);
+      }
+
+      if (!confirmed) return;
+
       try {
         const res = await apiFetch(`/admin/tenants/${tenantId}/reject`, { method: 'PUT' });
         if (res && res.success) {
-          showToast(res.message || 'Bayi başvurusu reddedildi.', 'warning');
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'info',
+              title: 'Başvuru Reddedildi',
+              text: res.message || 'Bayi başvurusu reddedildi.',
+              timer: 2000,
+              showConfirmButton: false
+            });
+          } else {
+            showToast(res.message || 'Bayi başvurusu reddedildi.', 'warning');
+          }
           await loadPendingTenants();
           await loadTenants();
           await loadAdminStats();
         } else {
-          showToast(res && res.message ? res.message : 'Reddetme başarısız.', 'danger');
+          const errMsg = (res && res.message) ? res.message : 'Reddetme başarısız.';
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'İşlem Başarısız', text: errMsg });
+          } else {
+            showToast(errMsg, 'danger');
+          }
         }
       } catch (err) {
         showToast('Hata: ' + err.message, 'danger');
@@ -1254,6 +1330,7 @@
 
     // ==========================================================================
     // 2. FİRMALARI YÜKLEME VE TABLOYA BASMA (API ENTEGRASYONU & XSS SANİTİZASYONU)
+    // Statü (status/is_approved/isActive) fark etmeksizin tüm bayileri listeler
     // ==========================================================================
     async function loadTenants() {
       try {
@@ -1261,42 +1338,97 @@
         await loadPendingTenants();
 
         const res = await apiFetch('/admin/tenants');
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const tbody = document.querySelector('.tenants-table tbody');
-          if (!tbody) return;
-          tbody.innerHTML = '';
+        const tbody = document.getElementById('tenants-main-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
 
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           res.data.forEach(tenant => {
-            const safeName = escapeHtml(tenant.name || '');
+            const safeName = escapeHtml(tenant.name || 'İsimsiz Firma');
             const safeSubdomain = escapeHtml(tenant.subdomain || '');
             const safeColor = escapeHtml(tenant.themeColor || '#2563eb');
-            const isActive = tenant.isActive !== false;
-            const initials = safeName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'AO';
+            const initials = safeName.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'AO';
 
-            // DURUM sütununda: PENDING, REJECTED veya APPROVED (Aktif / Pasif)
+            // Statü belirleme (status, is_approved ve isActive esnek kontrolü)
+            const rawStatus = (tenant.status || '').toString().trim().toUpperCase();
+            const isApprovedFlag = (tenant.is_approved !== undefined) ? Boolean(tenant.is_approved) : 
+                                  ((tenant.isApproved !== undefined) ? Boolean(tenant.isApproved) : null);
+
+            // Onay bekleyen durumu:
+            // - status === 'PENDING' / 'WAITING' / 'BEKLEMEDE'
+            // - veya is_approved === false (ve reddedilmemişse)
+            const isPending = rawStatus === 'PENDING' || rawStatus === 'WAITING' || rawStatus === 'WAITING_APPROVAL' || rawStatus === 'BEKLEMEDE' || (isApprovedFlag === false && rawStatus !== 'REJECTED');
+            const isRejected = rawStatus === 'REJECTED' || rawStatus === 'REDDEDILDI';
+
+            // Aktif / Pasif durumu:
+            const isActive = tenant.isActive !== false && !isPending && !isRejected && (rawStatus === 'APPROVED' || isApprovedFlag === true || (!rawStatus && tenant.isActive !== false));
+            const isPassive = !isActive && !isPending && !isRejected;
+
+            // DURUM Rozeti
             let statusHtml = '';
-            if (tenant.status === 'PENDING') {
-              statusHtml = `<span style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; padding:4px 10px; border-radius:9999px; font-weight:700; font-size:0.75rem; display:inline-flex; align-items:center; gap:5px;"><span style="display:inline-block; width:6px; height:6px; background:#f59e0b; border-radius:50%;"></span>Onay Bekliyor</span>`;
-            } else if (tenant.status === 'REJECTED') {
-              statusHtml = `<span style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:4px 10px; border-radius:9999px; font-weight:700; font-size:0.75rem; display:inline-flex; align-items:center; gap:5px;"><span style="display:inline-block; width:6px; height:6px; background:#ef4444; border-radius:50%;"></span>Reddedildi</span>`;
+            if (isPending) {
+              statusHtml = `<span class="badge-status-pending"><span class="badge-dot-pending"></span>Onay Bekliyor</span>`;
+            } else if (isRejected) {
+              statusHtml = `<span class="badge-status-rejected"><span style="display:inline-block; width:6px; height:6px; background:#ef4444; border-radius:50%;"></span>Reddedildi</span>`;
             } else if (isActive) {
               statusHtml = `<span class="badge-status-green"><span class="badge-dot-green"></span>Aktif</span>`;
             } else {
-              statusHtml = `<span class="badge-status-red" style="background:#fee2e2; color:#ef4444; border:1px solid #fca5a5; padding:4px 10px; border-radius:9999px; font-weight:700; font-size:0.75rem;"><span style="display:inline-block; width:6px; height:6px; background:#ef4444; border-radius:50%; margin-right:5px;"></span>Pasif</span>`;
+              statusHtml = `<span class="badge-status-passive"><span class="badge-dot-passive"></span>Pasif</span>`;
             }
 
-            // İŞLEMLER sütununda
-            const statusBtnHtml = isActive
-              ? `<button class="btn-table-action btn-status-toggle btn-deactivate" style="background:#fff7ed; color:#ea580c; border:1px solid #fed7aa; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;" title="Firmayı Pasife Al">Pasife Al</button>`
-              : `<button class="btn-table-action btn-status-toggle btn-activate" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;" title="Firmayı Aktifleştir">Aktife Al</button>`;
+            // İŞLEMLER Butonları:
+            // Prompt gereği: Durumu 'onay bekliyor/pasif' olan firmaların satırına 'Hesabı Onayla' butonu eklenir
+            let actionButtonsHtml = '';
+
+            if (isPending) {
+              // Durumu 'Onay Bekliyor' olan bayiler: 'Hesabı Onayla' ve 'Reddet'
+              actionButtonsHtml = `
+                <button type="button" class="btn-table-action btn-approve" title="Bayi Hesabını Onayla">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Hesabı Onayla
+                </button>
+                <button type="button" class="btn-table-action btn-reject" title="Bayi Başvurusunu Reddet">
+                  Reddet
+                </button>
+              `;
+            } else if (isPassive) {
+              // Durumu 'Pasif' olan firmalar: Prompt şartı 'Hesabı Onayla' ve 'Aktife Al'
+              actionButtonsHtml = `
+                <button type="button" class="btn-table-action btn-approve" title="Hesabı Onayla ve Aktifleştir">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Hesabı Onayla
+                </button>
+                <button type="button" class="btn-table-action btn-status-toggle btn-activate" title="Firmayı Aktifleştir">
+                  Aktife Al
+                </button>
+              `;
+            } else if (isRejected) {
+              // Reddedilmiş bayiler: 'Hesabı Onayla' ile tekrar aktifleştirme
+              actionButtonsHtml = `
+                <button type="button" class="btn-table-action btn-approve" title="Hesabı Yeniden Onayla">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Hesabı Onayla
+                </button>
+              `;
+            } else {
+              // Aktif onaylı bayiler: 'Pasife Al'
+              actionButtonsHtml = `
+                <button type="button" class="btn-table-action btn-status-toggle btn-deactivate" title="Firmayı Pasife Al">
+                  Pasife Al
+                </button>
+              `;
+            }
 
             const tr = document.createElement('tr');
             tr.dataset.tenantId = tenant.id;
             tr.innerHTML = `
               <td>
                 <div class="firm-identity">
-                  <div class="firm-avatar" style="background-color: ${safeColor};">${initials}</div>
-                  <span class="firm-name">${safeName}</span>
+                  <div class="firm-avatar" style="background-color: ${safeColor}; color:#fff; font-weight:700;">${initials}</div>
+                  <div>
+                    <span class="firm-name" style="font-weight: 700; color: #1e293b; display: block;">${safeName}</span>
+                    ${isPending ? '<span style="font-size: 0.72rem; color: #b45309; font-weight: 700; display: inline-block;">● Yeni Başvuru</span>' : ''}
+                  </div>
                 </div>
               </td>
               <td>
@@ -1314,9 +1446,9 @@
               <td>
                 <div class="actions-group">
                   <a href="store.html?subdomain=${safeSubdomain}" class="btn-table-action btn-store" target="_blank" title="B2B Mağazasına Git" style="text-decoration: none;">Mağaza</a>
-                  <button class="btn-table-action btn-edit" title="Firma Düzenle">Düzenle</button>
-                  ${statusBtnHtml}
-                  <button class="btn-table-action btn-delete" style="background: #fee2e2; color: #ef4444; border: 1px solid #fecaca; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;" title="Firmayı Sil">Sil</button>
+                  <button type="button" class="btn-table-action btn-edit" title="Firma Düzenle">Düzenle</button>
+                  ${actionButtonsHtml}
+                  <button type="button" class="btn-table-action btn-delete" style="background: #fee2e2; color: #ef4444; border: 1px solid #fecaca; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;" title="Firmayı Sil">Sil</button>
                 </div>
               </td>
             `;
@@ -1324,28 +1456,26 @@
             attachTenantRowEvents(tr);
           });
 
-          // KPI Güncellemesi (Sadece Aktif Olanlar)
-          const activeCount = res.data.filter(t => t.isActive !== false).length;
+          // KPI Güncellemesi
+          const totalCount = res.data.length;
+          const activeCount = res.data.filter(t => t.isActive !== false && (t.status === 'APPROVED' || !t.status)).length;
           const tenantsCountEl = document.getElementById('kpi-tenants-count');
           if (tenantsCountEl) {
-            tenantsCountEl.textContent = activeCount;
+            tenantsCountEl.textContent = totalCount;
           }
 
           const navCount = document.querySelector('.nav-count');
-          if (navCount) navCount.textContent = activeCount;
+          if (navCount) navCount.textContent = totalCount;
         } else if (res && res.success && Array.isArray(res.data) && res.data.length === 0) {
-          const tbody = document.querySelector('.tenants-table tbody');
-          if (tbody) {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="5" style="text-align: center; padding: 48px 20px; color: #64748b;">
-                  <div style="font-size: 32px; margin-bottom: 8px;">🏢</div>
-                  <div style="font-weight: 600; font-size: 15px; color: #1e293b;">Henüz kayıtlı bir bayi bulunmuyor.</div>
-                  <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Yukarıdaki "Yeni Firma Ekle" butonuna basarak ilk bayinizi oluşturabilirsiniz.</div>
-                </td>
-              </tr>
-            `;
-          }
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 48px 20px; color: #64748b;">
+                <div style="font-size: 32px; margin-bottom: 8px;">🏢</div>
+                <div style="font-weight: 600; font-size: 15px; color: #1e293b;">Henüz kayıtlı bir bayi bulunmuyor.</div>
+                <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Yukarıdaki "Yeni Firma Ekle" butonuna basarak ilk bayinizi oluşturabilirsiniz.</div>
+              </td>
+            </tr>
+          `;
           const tenantsCountEl = document.getElementById('kpi-tenants-count');
           if (tenantsCountEl) tenantsCountEl.textContent = '0';
           const navCount = document.querySelector('.nav-count');
@@ -1475,6 +1605,32 @@
     function attachTenantRowEvents(row) {
       const tenantId = row.dataset.tenantId;
 
+      // Onaylama ('Hesabı Onayla' butonu)
+      const approveBtn = row.querySelector('.btn-approve');
+      if (approveBtn) {
+        approveBtn.onclick = function (e) {
+          e.preventDefault();
+          const firmNameEl = row.querySelector('.firm-name');
+          const tenantName = firmNameEl ? firmNameEl.textContent.trim() : 'Bayi';
+          if (tenantId) {
+            approveTenant(tenantId, tenantName);
+          }
+        };
+      }
+
+      // Reddetme ('Reddet' butonu)
+      const rejectBtn = row.querySelector('.btn-reject');
+      if (rejectBtn) {
+        rejectBtn.onclick = function (e) {
+          e.preventDefault();
+          const firmNameEl = row.querySelector('.firm-name');
+          const tenantName = firmNameEl ? firmNameEl.textContent.trim() : 'Bayi';
+          if (tenantId) {
+            rejectTenant(tenantId, tenantName);
+          }
+        };
+      }
+
       // Durum Değiştirme ('Pasife Al' veya 'Aktife Al' butonu)
       const statusBtn = row.querySelector('.btn-status-toggle, .btn-deactivate, .btn-activate');
       if (statusBtn) {
@@ -1487,6 +1643,7 @@
 
               if (res && res.success) {
                 showToast(res.message || 'Bayi durumu güncellendi.', 'success');
+                await loadPendingTenants();
                 await loadTenants();
                 await loadAdminStats();
               } else {
@@ -1504,7 +1661,28 @@
       const deleteBtn = row.querySelector('.btn-delete');
       if (deleteBtn) {
         deleteBtn.onclick = async function () {
-          if (!confirm('Bu bayiyi ve tüm verilerini kalıcı olarak silmek istediğinize emin misiniz?')) return;
+          const firmNameEl = row.querySelector('.firm-name');
+          const tenantName = firmNameEl ? firmNameEl.textContent.trim() : 'Bu bayiyi';
+          let confirmed = false;
+
+          if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+              title: 'Bayiyi Sil?',
+              html: `<strong>"${escapeHtml(tenantName)}"</strong> bayisini ve tüm verilerini kalıcı olarak silmek istediğinize emin misiniz?`,
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#ef4444',
+              cancelButtonColor: '#64748b',
+              confirmButtonText: 'Evet, Sil',
+              cancelButtonText: 'Vazgeç',
+              reverseButtons: true
+            });
+            confirmed = result.isConfirmed;
+          } else {
+            confirmed = confirm(`"${tenantName}" bayisini ve tüm verilerini kalıcı olarak silmek istediğinize emin misiniz?`);
+          }
+
+          if (!confirmed) return;
 
           if (tenantId) {
             try {
@@ -1513,7 +1691,18 @@
               });
 
               if (res && res.success) {
-                showToast(res.message || 'Bayi ve tüm ilişkili veriler kalıcı olarak silindi.', 'success');
+                if (typeof Swal !== 'undefined') {
+                  Swal.fire({
+                    icon: 'success',
+                    title: 'Silindi',
+                    text: res.message || 'Bayi ve tüm ilişkili veriler kalıcı olarak silindi.',
+                    timer: 2000,
+                    showConfirmButton: false
+                  });
+                } else {
+                  showToast(res.message || 'Bayi ve tüm ilişkili veriler kalıcı olarak silindi.', 'success');
+                }
+                await loadPendingTenants();
                 await loadTenants();
                 await loadAdminStats();
               } else {
@@ -1557,7 +1746,7 @@
     }
 
     // İlk açılışta mevcut satırlara bağla ve API'den taze veriyi çek
-    document.querySelectorAll('.tenants-table tbody tr').forEach(attachTenantRowEvents);
+    document.querySelectorAll('#tenants-main-tbody tr, #pending-tenants-tbody tr').forEach(attachTenantRowEvents);
     loadTenants();
     loadAdminStats();
     loadSettings();

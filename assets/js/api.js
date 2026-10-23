@@ -23,12 +23,13 @@
   // ----------------------------------------------------------------------------
   // YEREL TOHUM (MOCK SEED) VERİ HAVUZU
   // ----------------------------------------------------------------------------
-  const MOCK_STORAGE_KEY = 'saas_b2b_standalone_data_v2';
+  const MOCK_STORAGE_KEY = 'saas_b2b_standalone_data_v3';
 
   function initMockStore() {
     // Eski mock kalıntılarını tarayıcıdan temizle
     try {
       localStorage.removeItem('saas_b2b_standalone_data_v1');
+      localStorage.removeItem('saas_b2b_standalone_data_v2');
     } catch (e) {}
 
     let store = null;
@@ -67,6 +68,26 @@
               status: 'APPROVED',
               isActive: true
             }
+          },
+          {
+            id: 'usr-kardesler-admin',
+            email: 'mehmet@kardesleroto.com',
+            password: '123456',
+            role: 'TENANT_ADMIN',
+            name: 'Mehmet Kardeşler',
+            status: 'PENDING',
+            tenantId: 'tenant-kardesler-oto',
+            tenant: null
+          },
+          {
+            id: 'usr-ozkan-admin',
+            email: 'info@ozkanoto.com',
+            password: '123456',
+            role: 'TENANT_ADMIN',
+            name: 'Ali Özkan',
+            status: 'APPROVED',
+            tenantId: 'tenant-ozkan-oto',
+            tenant: null
           }
         ],
         tenants: [
@@ -78,6 +99,28 @@
             status: 'APPROVED',
             isActive: true,
             createdAt: '2026-03-01T10:00:00.000Z',
+            _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
+          },
+          {
+            id: 'tenant-kardesler-oto',
+            name: 'Kardeşler Otomotiv',
+            subdomain: 'kardesleroto',
+            themeColor: '#3b82f6',
+            status: 'PENDING',
+            isActive: false,
+            adminEmail: 'mehmet@kardesleroto.com',
+            createdAt: '2026-10-23T11:00:00.000Z',
+            _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
+          },
+          {
+            id: 'tenant-ozkan-oto',
+            name: 'Özkan Yedek Parça',
+            subdomain: 'ozkanoto',
+            themeColor: '#10b981',
+            status: 'APPROVED',
+            isActive: false,
+            adminEmail: 'info@ozkanoto.com',
+            createdAt: '2026-09-15T09:00:00.000Z',
             _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
           }
         ],
@@ -482,7 +525,7 @@
     }
 
     // 2.2 PUT /admin/tenants/:id/approve (Bayi Onayla)
-    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/approve') && method === 'PUT') {
+    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/approve') && (method === 'PUT' || method === 'PATCH' || method === 'POST')) {
       const parts = cleanEndpoint.split('/');
       const tenantId = parts[3];
       const tenant = (store.tenants || []).find(t => t.id === tenantId);
@@ -503,7 +546,7 @@
     }
 
     // 2.3 PUT /admin/tenants/:id/reject (Bayi Reddet)
-    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/reject') && method === 'PUT') {
+    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/reject') && (method === 'PUT' || method === 'PATCH' || method === 'POST')) {
       const parts = cleanEndpoint.split('/');
       const tenantId = parts[3];
       const tenant = (store.tenants || []).find(t => t.id === tenantId);
