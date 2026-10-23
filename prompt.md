@@ -1,5 +1,2 @@
-"Backend'den artık hem onaylı hem de 'onay bekleyen' (pending) bayiler geliyor. Ancak Admin panelindeki 'Kayıtlı Firmalar (Tenants)' tablosunda onay bekleyenleri göremiyoruz veya onaylamak için bir işlem butonumuz eksik.
-
-Tabloya verileri basarken statü (status/is_approved) fark etmeksizin tüm bayilerin listelenmesini sağla.
-
-Durumu 'onay bekliyor/pasif' olan firmaların satırına (İşlemler sütununa) 'Hesabı Onayla' işlevini yapacak bir buton ekle ve bu butonu backend'deki onaylama API'sine bağla."
+"Admin panelinde 'Hesabı Onayla' butonuna tıkladığımda, backend'den başarılı yanıt dönse bile tablodaki 'DURUM' sütunu anında güncellenmiyor ve 'Onay Bekliyor' olarak kalmaya devam ediyor.
+Lütfen 'Hesabı Onayla' fonksiyonunun (API isteğinin) hemen arkasına, işlem başarılı (200 OK) olduğunda tablo verilerini yeniden çekecek (fetch/refresh) bir kod ekle. Alternatif olarak, başarılı yanıt alındığında o satırın durumunu (state) lokal olarak frontend tarafında 'Aktif' veya 'Onaylandı' olarak değiştirecek şekilde state yönetimini güncelle."

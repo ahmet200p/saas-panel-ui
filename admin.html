@@ -1219,6 +1219,90 @@
     }
     window.loadPendingTenants = loadPendingTenants;
 
+    // ==========================================================================
+    // 1.95 LOKAL DURUM (STATE) VE REAKTİF DOM GÜNCELLEMESİ (OPTIMISTIC UI UPDATE)
+    // ==========================================================================
+    window.approvedTenantIds = window.approvedTenantIds || new Set();
+
+    function updateTenantRowOptimistically(tenantId, newStatus) {
+      if (!tenantId) return;
+      if (newStatus === 'APPROVED' || newStatus === 'ACTIVE') {
+        window.approvedTenantIds.add(tenantId);
+      } else if (newStatus === 'REJECTED') {
+        window.approvedTenantIds.delete(tenantId);
+      }
+
+      // 1. Ana Tablodaki (#tenants-main-tbody) satırı anında güncelle
+      const row = document.querySelector(`#tenants-main-tbody tr[data-tenant-id="${tenantId}"]`);
+      if (row) {
+        // Durum sütununu (4. sütun) anında yeşil 'Aktif' rozetine çevir
+        if (row.cells && row.cells.length >= 4) {
+          row.cells[3].innerHTML = `<span class="badge-status-green"><span class="badge-dot-green"></span>Aktif</span>`;
+        } else {
+          const statusCell = row.querySelector('td:nth-child(4)');
+          if (statusCell) statusCell.innerHTML = `<span class="badge-status-green"><span class="badge-dot-green"></span>Aktif</span>`;
+        }
+
+        // Firma adının yanındaki "Yeni Başvuru" rozetini anında temizle
+        const newBadge = row.querySelector('.firm-identity span[style*="b45309"], .firm-identity span[style*="amber"]');
+        if (newBadge) newBadge.remove();
+
+        // İşlemler sütunundaki Onay/Reddet butonlarını kaldır, 'Pasife Al' butonu yerleştir
+        const actionsGroup = row.querySelector('.actions-group');
+        if (actionsGroup) {
+          const approveBtn = actionsGroup.querySelector('.btn-approve');
+          const rejectBtn = actionsGroup.querySelector('.btn-reject');
+          if (approveBtn) approveBtn.remove();
+          if (rejectBtn) rejectBtn.remove();
+
+          // Eğer Pasife Al butonu yoksa ekle
+          if (!actionsGroup.querySelector('.btn-status-toggle')) {
+            const deactBtn = document.createElement('button');
+            deactBtn.type = 'button';
+            deactBtn.className = 'btn-table-action btn-status-toggle btn-deactivate';
+            deactBtn.title = 'Firmayı Pasife Al';
+            deactBtn.textContent = 'Pasife Al';
+            
+            const deleteBtn = actionsGroup.querySelector('.btn-delete');
+            if (deleteBtn) {
+              actionsGroup.insertBefore(deactBtn, deleteBtn);
+            } else {
+              actionsGroup.appendChild(deactBtn);
+            }
+          }
+        }
+
+        // Yeni butonların tıklama olaylarını bağla
+        attachTenantRowEvents(row);
+      }
+
+      // 2. Üstteki Onay Bekleyenler kutusundaki (#pending-tenants-tbody) satırı kaldır
+      const pendingRows = document.querySelectorAll('#pending-tenants-tbody tr');
+      pendingRows.forEach(pRow => {
+        if (pRow.innerHTML.includes(tenantId) || pRow.dataset.tenantId === tenantId) {
+          pRow.style.transition = 'all 0.25s ease';
+          pRow.style.opacity = '0';
+          setTimeout(() => {
+            pRow.remove();
+            const remaining = document.querySelectorAll('#pending-tenants-tbody tr').length;
+            const countBadge = document.getElementById('pending-count-badge');
+            const sideBadge = document.getElementById('pending-tenants-badge');
+            if (countBadge) countBadge.textContent = remaining;
+            if (sideBadge) {
+              if (remaining > 0) {
+                sideBadge.textContent = `${remaining} Onay`;
+              } else {
+                sideBadge.style.display = 'none';
+                const section = document.getElementById('pending-tenants-section');
+                if (section) section.style.display = 'none';
+              }
+            }
+          }, 250);
+        }
+      });
+    }
+    window.updateTenantRowOptimistically = updateTenantRowOptimistically;
+
     async function approveTenant(tenantId, tenantName) {
       if (!tenantId) return;
       let confirmed = false;
@@ -1246,20 +1330,26 @@
       try {
         const res = await apiFetch(`/admin/tenants/${tenantId}/approve`, { method: 'PUT' });
         if (res && res.success) {
+          // 1. Önce Lokal State ve DOM'u anında 'Aktif' olarak güncelle (Optimistic & Instant UI State)
+          updateTenantRowOptimistically(tenantId, 'APPROVED');
+
+          // 2. Tablo verilerini backend'den anında yeniden çek (Refresh/Fetch)
+          await loadPendingTenants();
+          await loadTenants();
+          await loadAdminStats();
+
+          // 3. Bildirimi göster
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'success',
               title: 'Hesap Onaylandı!',
               text: res.message || `"${tenantName}" bayisi başarıyla onaylandı ve mağazası aktifleştirildi.`,
-              timer: 2400,
+              timer: 2000,
               showConfirmButton: false
             });
           } else {
             showToast(res.message || 'Bayi başarıyla onaylandı.', 'success');
           }
-          await loadPendingTenants();
-          await loadTenants();
-          await loadAdminStats();
         } else {
           const errMsg = (res && res.message) ? res.message : 'Onaylama başarısız.';
           if (typeof Swal !== 'undefined') {
@@ -1300,6 +1390,14 @@
       try {
         const res = await apiFetch(`/admin/tenants/${tenantId}/reject`, { method: 'PUT' });
         if (res && res.success) {
+          // 1. Lokal State güncellemesi
+          updateTenantRowOptimistically(tenantId, 'REJECTED');
+
+          // 2. Tabloları yeniden çek
+          await loadPendingTenants();
+          await loadTenants();
+          await loadAdminStats();
+
           if (typeof Swal !== 'undefined') {
             Swal.fire({
               icon: 'info',
@@ -1311,9 +1409,6 @@
           } else {
             showToast(res.message || 'Bayi başvurusu reddedildi.', 'warning');
           }
-          await loadPendingTenants();
-          await loadTenants();
-          await loadAdminStats();
         } else {
           const errMsg = (res && res.message) ? res.message : 'Reddetme başarısız.';
           if (typeof Swal !== 'undefined') {
@@ -1349,20 +1444,32 @@
             const safeColor = escapeHtml(tenant.themeColor || '#2563eb');
             const initials = safeName.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'AO';
 
-            // Statü belirleme (status, is_approved ve isActive esnek kontrolü)
+            // Statü belirleme (status, is_approved, isActive ve lokal onay hafızası)
+            const isApprovedLocally = window.approvedTenantIds && window.approvedTenantIds.has(tenant.id);
             const rawStatus = (tenant.status || '').toString().trim().toUpperCase();
             const isApprovedFlag = (tenant.is_approved !== undefined) ? Boolean(tenant.is_approved) : 
                                   ((tenant.isApproved !== undefined) ? Boolean(tenant.isApproved) : null);
 
-            // Onay bekleyen durumu:
-            // - status === 'PENDING' / 'WAITING' / 'BEKLEMEDE'
-            // - veya is_approved === false (ve reddedilmemişse)
-            const isPending = rawStatus === 'PENDING' || rawStatus === 'WAITING' || rawStatus === 'WAITING_APPROVAL' || rawStatus === 'BEKLEMEDE' || (isApprovedFlag === false && rawStatus !== 'REJECTED');
-            const isRejected = rawStatus === 'REJECTED' || rawStatus === 'REDDEDILDI';
+            let isPending = false;
+            let isRejected = false;
+            let isActive = false;
+            let isPassive = false;
 
-            // Aktif / Pasif durumu:
-            const isActive = tenant.isActive !== false && !isPending && !isRejected && (rawStatus === 'APPROVED' || isApprovedFlag === true || (!rawStatus && tenant.isActive !== false));
-            const isPassive = !isActive && !isPending && !isRejected;
+            if (rawStatus === 'REJECTED' || rawStatus === 'REDDEDILDI') {
+              isRejected = true;
+            } else if (tenant.isActive === true) {
+              // Veritabanında / backend'de aktif
+              isActive = true;
+            } else if (isApprovedLocally && tenant.isActive !== false) {
+              // Lokal state hafızasında onaylandı olarak işaretli ve henüz pasife alınmamış
+              isActive = true;
+            } else if (rawStatus === 'APPROVED' || isApprovedFlag === true || isApprovedLocally) {
+              // Onaylanmış ancak isActive === false (Pasife Alınmış)
+              isPassive = true;
+            } else {
+              // Henüz onaylanmamış yeni başvuru
+              isPending = true;
+            }
 
             // DURUM Rozeti
             let statusHtml = '';
