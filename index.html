@@ -456,7 +456,15 @@
           document.getElementById('form-bayi-register').reset();
           if (res.token) {
             localStorage.setItem('token', res.token);
-            if (res.user) localStorage.setItem('user', JSON.stringify(res.user));
+            if (res.user) {
+              localStorage.setItem('user', JSON.stringify(res.user));
+              if (res.user.tenantId || (res.user.tenant && res.user.tenant.id)) {
+                localStorage.setItem('tenantId', res.user.tenantId || res.user.tenant.id);
+              }
+              if (res.user.tenant && (res.user.tenant.subdomain || res.user.tenant.slug)) {
+                localStorage.setItem('tenantSlug', res.user.tenant.subdomain || res.user.tenant.slug);
+              }
+            }
           }
           setTimeout(() => {
             window.location.href = 'bayi.html';
@@ -644,6 +652,12 @@
               localStorage.setItem('token', res.token);
               if (res.user) {
                 localStorage.setItem('user', JSON.stringify(res.user));
+                if (res.user.tenantId || (res.user.tenant && res.user.tenant.id)) {
+                  localStorage.setItem('tenantId', res.user.tenantId || res.user.tenant.id);
+                }
+                if (res.user.tenant && (res.user.tenant.subdomain || res.user.tenant.slug)) {
+                  localStorage.setItem('tenantSlug', res.user.tenant.subdomain || res.user.tenant.slug);
+                }
               }
 
               // 5. Kullanıcının rolüne göre yönlendirme yap (window.location.href)
