@@ -23,13 +23,12 @@
   // ----------------------------------------------------------------------------
   // YEREL TOHUM (MOCK SEED) VERİ HAVUZU
   // ----------------------------------------------------------------------------
-  const MOCK_STORAGE_KEY = 'saas_b2b_standalone_data_v3';
+  const MOCK_STORAGE_KEY = 'saas_b2b_standalone_data_v2';
 
   function initMockStore() {
     // Eski mock kalıntılarını tarayıcıdan temizle
     try {
       localStorage.removeItem('saas_b2b_standalone_data_v1');
-      localStorage.removeItem('saas_b2b_standalone_data_v2');
     } catch (e) {}
 
     let store = null;
@@ -68,26 +67,6 @@
               status: 'APPROVED',
               isActive: true
             }
-          },
-          {
-            id: 'usr-kardesler-admin',
-            email: 'mehmet@kardesleroto.com',
-            password: '123456',
-            role: 'TENANT_ADMIN',
-            name: 'Mehmet Kardeşler',
-            status: 'PENDING',
-            tenantId: 'tenant-kardesler-oto',
-            tenant: null
-          },
-          {
-            id: 'usr-ozkan-admin',
-            email: 'info@ozkanoto.com',
-            password: '123456',
-            role: 'TENANT_ADMIN',
-            name: 'Ali Özkan',
-            status: 'APPROVED',
-            tenantId: 'tenant-ozkan-oto',
-            tenant: null
           }
         ],
         tenants: [
@@ -99,28 +78,6 @@
             status: 'APPROVED',
             isActive: true,
             createdAt: '2026-03-01T10:00:00.000Z',
-            _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
-          },
-          {
-            id: 'tenant-kardesler-oto',
-            name: 'Kardeşler Otomotiv',
-            subdomain: 'kardesleroto',
-            themeColor: '#3b82f6',
-            status: 'PENDING',
-            isActive: false,
-            adminEmail: 'mehmet@kardesleroto.com',
-            createdAt: '2026-10-23T11:00:00.000Z',
-            _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
-          },
-          {
-            id: 'tenant-ozkan-oto',
-            name: 'Özkan Yedek Parça',
-            subdomain: 'ozkanoto',
-            themeColor: '#10b981',
-            status: 'APPROVED',
-            isActive: false,
-            adminEmail: 'info@ozkanoto.com',
-            createdAt: '2026-09-15T09:00:00.000Z',
             _count: { tenantProducts: 0, customerProfiles: 0, orders: 0 }
           }
         ],
@@ -525,7 +482,7 @@
     }
 
     // 2.2 PUT /admin/tenants/:id/approve (Bayi Onayla)
-    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/approve') && (method === 'PUT' || method === 'PATCH' || method === 'POST')) {
+    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/approve') && method === 'PUT') {
       const parts = cleanEndpoint.split('/');
       const tenantId = parts[3];
       const tenant = (store.tenants || []).find(t => t.id === tenantId);
@@ -546,7 +503,7 @@
     }
 
     // 2.3 PUT /admin/tenants/:id/reject (Bayi Reddet)
-    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/reject') && (method === 'PUT' || method === 'PATCH' || method === 'POST')) {
+    if (cleanEndpoint.startsWith('/admin/tenants/') && cleanEndpoint.endsWith('/reject') && method === 'PUT') {
       const parts = cleanEndpoint.split('/');
       const tenantId = parts[3];
       const tenant = (store.tenants || []).find(t => t.id === tenantId);
@@ -1448,7 +1405,7 @@
       let brandFilter = '';
       let searchFilter = '';
       try {
-        const parsedUrl = new URL(endpoint, 'https://saas-g-ncel-10-10-2026simdi-main.onrender.com');
+        const parsedUrl = new URL(endpoint, 'http://localhost');
         brandFilter = (parsedUrl.searchParams.get('brand') || '').trim().toLowerCase();
         searchFilter = (parsedUrl.searchParams.get('search') || '').trim().toLowerCase();
       } catch (e) {}
@@ -1702,76 +1659,7 @@
    * modundaysa kullanıcıyı engellemeden kusursuz bir deneyim sunar.
    */
   async function apiFetch(endpoint, options = {}) {
-    // 1. Dinamik Tenant & Kullanıcı Bilgisi Çözümleme
-    let tenantId = options.tenantId || null;
-    let tenantSlug = options.tenantSlug || options.subdomain || null;
-
-    // A. URL arama parametrelerinden tenant bilgisi oku
-    if (typeof window !== 'undefined' && window.location) {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (!tenantId) tenantId = urlParams.get('tenantId') || urlParams.get('tenant_id');
-        if (!tenantSlug) tenantSlug = urlParams.get('tenant') || urlParams.get('subdomain') || urlParams.get('slug');
-      } catch (e) {}
-    }
-
-    // B. LocalStorage veya SessionStorage'dan tenantId ve tenantSlug oku
-    if (typeof localStorage !== 'undefined') {
-      if (!tenantId) tenantId = localStorage.getItem('tenantId') || localStorage.getItem('selectedTenantId');
-      if (!tenantSlug) tenantSlug = localStorage.getItem('tenantSlug') || localStorage.getItem('subdomain');
-      
-      // user nesnesi içinden tenantId ve subdomain çözümleme
-      try {
-        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        if (!tenantId && storedUser) {
-          tenantId = storedUser.tenantId || (storedUser.tenant && storedUser.tenant.id) || (storedUser.customerProfile && storedUser.customerProfile.tenantId);
-        }
-        if (!tenantSlug && storedUser && storedUser.tenant) {
-          tenantSlug = storedUser.tenant.subdomain || storedUser.tenant.slug;
-        }
-      } catch (e) {}
-    }
-
-    // C. Ham Token (JWT) içinden tenantId çözümleme
-    let rawToken = null;
-    if (typeof localStorage !== 'undefined') {
-      rawToken = localStorage.getItem('token');
-    }
-    if (!rawToken && typeof sessionStorage !== 'undefined') {
-      rawToken = sessionStorage.getItem('token');
-    }
-    if (rawToken) {
-      rawToken = rawToken.replace(/^["']|["']$/g, '').trim();
-      if (!tenantId && typeof parseJwtPayload === 'function') {
-        const jwtPayload = parseJwtPayload(rawToken);
-        if (jwtPayload && jwtPayload.tenantId) {
-          tenantId = jwtPayload.tenantId;
-        }
-      }
-    }
-
-    // D. Hostname üzerinden subdomain / slug çözümleme
-    if (!tenantSlug && typeof window !== 'undefined' && window.location && window.location.hostname) {
-      const parts = window.location.hostname.split('.');
-      if (parts.length > 2 && parts[0] !== 'www' && parts[0] !== 'localhost') {
-        tenantSlug = parts[0];
-      }
-    }
-
-    // E. Bayi Paneli (bayi.html) veya /tenant rotaları için güvenli aktif bayi fallback (Ahmet Oto)
-    const isDealerContext = (typeof window !== 'undefined' && window.location && (
-      window.location.pathname.includes('bayi.html') || 
-      window.location.pathname.includes('tenant.html')
-    )) || endpoint.includes('/tenant');
-
-    if (isDealerContext) {
-      if (!tenantId) tenantId = '51144f71-81dd-4f24-98d5-45fac505cfc2'; // Canlı sistemdeki birincil onaylı bayi ID'si
-      if (!tenantSlug) tenantSlug = 'ahmetoto';
-    } else {
-      if (!tenantSlug) tenantSlug = 'ahmetoto';
-    }
-
-    // 2. URL Yapılandırması
+    // 1. URL Yapılandırması
     let url = endpoint;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       if (!url.startsWith('/api')) {
@@ -1781,29 +1669,7 @@
       }
     }
 
-    // 3. Opsiyonel Query Parametreleri (Pagination & Filter Desteği)
-    if (options.params && typeof options.params === 'object') {
-      const qParams = new URLSearchParams();
-      for (const [pk, pv] of Object.entries(options.params)) {
-        if (pv !== undefined && pv !== null && pv !== '') {
-          qParams.append(pk, pv);
-        }
-      }
-      const qs = qParams.toString();
-      if (qs) {
-        url += (url.includes('?') ? '&' : '?') + qs;
-      }
-    }
-
-    // 4. Bayi (Tenant) API isteklerinde URL'e zorunlu tenantId query parametresini otomatik ekle
-    // Backend resolveTenantId(req, res) hem req.query.tenantId hem de headers kontrol eder; bu çift katman 400 Bad Request'i %100 önler.
-    if (tenantId && (url.includes('/tenant/') || url.endsWith('/tenant') || url.includes('/api/tenant'))) {
-      if (!url.includes('tenantId=')) {
-        url += (url.includes('?') ? '&' : '?') + `tenantId=${encodeURIComponent(tenantId)}`;
-      }
-    }
-
-    // 5. Başlıklar (Headers), Authorization ve Tenant-ID Enjeksiyonu
+    // 2. Başlıklar (Headers) ve Token Enjeksiyonu
     const headers = new Headers(options.headers || {});
     if (options.body instanceof FormData) {
       headers.delete('Content-Type');
@@ -1811,20 +1677,45 @@
       headers.set('Content-Type', 'application/json');
     }
 
-    // A. Bearer Token Enjeksiyonu
-    if (rawToken && !headers.has('Authorization') && !headers.has('authorization')) {
-      headers.set('Authorization', `Bearer ${rawToken}`);
+    const token = localStorage.getItem('token');
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
-    // B. Tenant Kimliği Başlıkları (X-Tenant-Id & Tenant-ID)
-    if (tenantId) {
-      if (!headers.has('X-Tenant-Id')) headers.set('X-Tenant-Id', tenantId);
-      if (!headers.has('Tenant-ID')) headers.set('Tenant-ID', tenantId);
+    // Dinamik Kullanıcı ve Bayi (Tenant) Kimliği Enjeksiyonu
+    let storedUser = null;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) storedUser = JSON.parse(userStr);
+    } catch (e) {}
+
+    const resolvedTenantId = storedUser?.tenantId || storedUser?.tenant?.id || localStorage.getItem('tenantId');
+    if (resolvedTenantId) {
+      if (!headers.has('X-Tenant-ID')) headers.set('X-Tenant-ID', resolvedTenantId);
+      if (!headers.has('Tenant-ID')) headers.set('Tenant-ID', resolvedTenantId);
     }
 
-    // C. Subdomain / Slug Başlığı (X-Tenant-Slug)
-    if (tenantSlug) {
-      if (!headers.has('X-Tenant-Slug')) headers.set('X-Tenant-Slug', tenantSlug);
+    // 5. ADIM: Tenant Algılama (Subdomain/Slug Resolution)
+    // URL parametresinden (?tenant=slug veya ?subdomain=slug) veya kullanıcı bilgisinden tenant slug algıla
+    if (!headers.has('X-Tenant-Slug')) {
+      let slug = null;
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        slug = urlParams.get('tenant') || urlParams.get('subdomain');
+        if (!slug && window.location.hostname) {
+          const parts = window.location.hostname.split('.');
+          if (parts.length > 2 && parts[0] !== 'www' && parts[0] !== 'localhost') {
+            slug = parts[0];
+          }
+        }
+      }
+      if (!slug) {
+        slug = storedUser?.tenant?.subdomain || storedUser?.subdomain || localStorage.getItem('tenantSlug') || 'ahmetoto';
+      }
+      if (slug) {
+        headers.set('X-Tenant-Slug', slug);
+        headers.set('X-Subdomain', slug);
+      }
     }
 
     let body = options.body;
@@ -1832,7 +1723,7 @@
       body = JSON.stringify(body);
     }
 
-    // 6. Canlı Sunucuya Bağlantı Denemesi (Render Express API)
+    // 3. Canlı Sunucuya Bağlantı Denemesi (Yerel localhost Express API'sine doğrudan bağlan)
     try {
       const controller = new AbortController();
       const timeoutMs = (options.body instanceof FormData) ? 60000 : 15000;
@@ -1860,18 +1751,6 @@
         }
       }
 
-      // 400 Bad Request: Eğer tenantId eksikliği kaynaklı hata döndüyse kendi kendini onaran (Self-Healing) yeniden deneme
-      if (response.status === 400 && data && data.message && data.message.includes('tenantId') && !options._retried) {
-        console.warn('[API] 400 tenantId uyarısı alındı. Güvenli aktif bayi kimliğiyle anında yeniden deneniyor...');
-        const retryTenantId = '51144f71-81dd-4f24-98d5-45fac505cfc2';
-        return apiFetch(endpoint, {
-          ...options,
-          _retried: true,
-          tenantId: retryTenantId,
-          tenantSlug: 'ahmetoto'
-        });
-      }
-
       const isLoginEndpoint = url.includes('/auth/login') || url.includes('/auth/tenant-login') || url.includes('/auth/customer-login');
       const isStoreContext = (typeof window !== 'undefined' && window.location && (
         window.location.pathname.endsWith('store.html') ||
@@ -1880,6 +1759,7 @@
       )) || url.includes('/store/products') || url.includes('/store/bank-info') || url.includes('/store/tenant-info');
 
       if ((response.status === 401 || response.status === 403) && !isLoginEndpoint) {
+        // 1. ADIM & 2. ADIM: Müşteri vitrininde (store.html) asla genel SaaS login.html sayfasına yönlendirme!
         if (isStoreContext) {
           console.warn(`[API] Vitrinde yetkisiz/oturumsuz istek (${response.status}). Ziyaretçi modunda kalınacak.`);
           if (response.status === 401) {
@@ -2035,15 +1915,13 @@
   function parseJwtPayload(token) {
     if (!token || typeof token !== 'string') return null;
 
-    // 1. Harici jwt-decode kütüphanesi yüklüyse öncelikli kullan
+    // 1. jwt-decode kütüphanesi yüklüyse öncelikli kullan
     try {
-      if (typeof window !== 'undefined') {
-        if (typeof window.jwtDecode === 'function' && window.jwtDecode !== parseJwtPayload) {
-          return window.jwtDecode(token);
-        }
-        if (typeof window.jwt_decode === 'function' && window.jwt_decode !== parseJwtPayload) {
-          return window.jwt_decode(token);
-        }
+      if (typeof window.jwtDecode === 'function') {
+        return window.jwtDecode(token);
+      }
+      if (typeof window.jwt_decode === 'function') {
+        return window.jwt_decode(token);
       }
     } catch (e) {
       console.warn('[JWT] jwt-decode kütüphane ayrıştırma uyarısı:', e);
@@ -2078,59 +1956,6 @@
     return null;
   }
 
-  function getResolvedTenantSlug() {
-    let slug = null;
-    if (typeof window !== 'undefined' && window.location) {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        slug = urlParams.get('tenant') || urlParams.get('subdomain') || urlParams.get('slug');
-        if (!slug && window.location.hostname) {
-          const parts = window.location.hostname.split('.');
-          if (parts.length > 2 && parts[0] !== 'www' && parts[0] !== 'localhost') {
-            slug = parts[0];
-          }
-        }
-      } catch (e) {}
-    }
-    if (!slug && typeof localStorage !== 'undefined') {
-      slug = localStorage.getItem('tenantSlug') || localStorage.getItem('subdomain');
-      if (!slug) {
-        try {
-          const user = JSON.parse(localStorage.getItem('user') || '{}');
-          if (user && user.tenant) slug = user.tenant.subdomain || user.tenant.slug;
-        } catch (e) {}
-      }
-    }
-    return slug || 'ahmetoto';
-  }
-
-  function getResolvedTenantId() {
-    let tenantId = null;
-    if (typeof window !== 'undefined' && window.location) {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        tenantId = urlParams.get('tenantId') || urlParams.get('tenant_id');
-      } catch (e) {}
-    }
-    if (!tenantId && typeof localStorage !== 'undefined') {
-      tenantId = localStorage.getItem('tenantId') || localStorage.getItem('selectedTenantId');
-      if (!tenantId) {
-        try {
-          const user = JSON.parse(localStorage.getItem('user') || '{}');
-          if (user) tenantId = user.tenantId || (user.tenant && user.tenant.id) || (user.customerProfile && user.customerProfile.tenantId);
-        } catch (e) {}
-      }
-    }
-    if (!tenantId) {
-      const token = (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null);
-      if (token && typeof parseJwtPayload === 'function') {
-        const payload = parseJwtPayload(token);
-        if (payload && payload.tenantId) tenantId = payload.tenantId;
-      }
-    }
-    return tenantId || '51144f71-81dd-4f24-98d5-45fac505cfc2';
-  }
-
   // Global window nesnesine ata
   window.API_BASE = API_BASE;
   window.apiFetch = apiFetch;
@@ -2140,6 +1965,5 @@
   window.parseJwtPayload = parseJwtPayload;
   window.jwtDecode = window.jwtDecode || parseJwtPayload;
   window.getResolvedTenantSlug = getResolvedTenantSlug;
-  window.getResolvedTenantId = getResolvedTenantId;
 
 })(window);
